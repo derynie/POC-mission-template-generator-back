@@ -1,5 +1,5 @@
 const dbConnection = require('../service/dbConnection.service');
-const { noImage } = require('../utils/config');
+const config = require('../utils/config');
 
 function insertMany(req, res, callback) {
     dbConnection(function (err, connection) {
@@ -11,7 +11,7 @@ function insertMany(req, res, callback) {
         for (let i = 0; i < environments.length; i++) {
             names.push(environments[i].name);
             if (!environments[i].logo || environments[i].logo === null) {
-                logos.push(noImage)
+                logos.push(config.noImage)
             } else {
                 logos.push(environments[i].logo);
             }

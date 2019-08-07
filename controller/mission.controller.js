@@ -2,9 +2,7 @@ const dbConnection = require('../service/dbConnection.service');
 const detailMissionController = require('./detailMission.controller');
 const environmentController = require('./environment.controller');
 const nodemailer = require('nodemailer');
-const { mailAuthentificationEmail } = require('../utils/config');
-const { mailAuthentificationPassword } = require('../utils/config');
-const { mailsTo } = require('../utils/config');
+const config = require('../utils/config');
 
 function continueCreateOne(req, res, callback) {
     const mission = {
@@ -203,16 +201,16 @@ function sendMailAfterCreate(req, res) {
     const transporter = nodemailer.createTransport({
         service: 'outlook',
         auth: {
-            user: mailAuthentificationEmail,
-            pass: mailAuthentificationPassword
+            user: config.mailAuthentificationEmail,
+            pass: config.mailAuthentificationPassword
         }
     });
 
     const text = 'The collaborator ' + req.body.name + ' as created a new mission.';
 
     const mailOptions = {
-        from: mailAuthentificationEmail,
-        to: mailsTo,
+        from: config.mailAuthentificationEmail,
+        to: config.mailsTo,
         subject: 'A new mission has been created',
         text: text
     };

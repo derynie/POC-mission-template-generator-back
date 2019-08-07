@@ -1,12 +1,12 @@
 const jwt = require('jsonwebtoken');
 const _ = require('lodash');
-const { tokenKey } = require('../utils/config');
+const config = require('../utils/config');
 
 function verifyJWTToken(token)
 {
     return new Promise((resolve, reject) =>
     {
-        jwt.verify(token.substr(7), tokenKey, (err, decodedToken) =>
+        jwt.verify(token.substr(7), config.tokenKey, (err, decodedToken) =>
         {
 
             if (err || !decodedToken)
@@ -42,7 +42,7 @@ function createJWToken(details)
 
     let token = jwt.sign({
         data: details.sessionData
-    }, tokenKey, {
+    }, config.tokenKey, {
         expiresIn: details.maxAge,
         algorithm: 'HS256'
     });
