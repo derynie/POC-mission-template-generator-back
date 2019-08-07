@@ -1,0 +1,749 @@
+CREATE DATABASE IF NOT EXISTS `missions`;
+
+USE `missions`;
+
+create table if not exists environment
+(
+    id   int auto_increment
+        primary key,
+    name varchar(200) not null,
+    logo text         not null,
+    constraint environment_name_uindex
+        unique (name)
+);
+
+create table if not exists roles
+(
+    id   int auto_increment
+        primary key,
+    name char(5) default 'user' not null
+);
+
+create table if not exists users
+(
+    id        int auto_increment
+        primary key,
+    firstName text          not null,
+    lastName  text          not null,
+    email     varchar(100)  not null,
+    password  text          not null,
+    roleId    int default 2 not null,
+    createdAt date          not null,
+    updatedAt date          not null,
+    constraint users_email_uindex
+        unique (email),
+    constraint users_roles_id_fk
+        foreign key (roleId) references roles (id)
+);
+
+create table if not exists missions
+(
+    id         int auto_increment
+        primary key,
+    userId     int                  not null,
+    name       text                 null,
+    image      text                 null,
+    logoGroup  text                 null,
+    logoClient text                 null,
+    nameGroup  text                 null,
+    nameClient text                 null,
+    webSite    text                 null,
+    context    text                 null,
+    livrable   text                 null,
+    atecnaPlus text                 null,
+    createdAt  date                 not null,
+    updatedAt  date                 not null,
+    validated  tinyint(1) default 0 not null,
+    constraint missions_users_id_fk
+        foreign key (userId) references users (id)
+);
+
+create table if not exists detailMission
+(
+    id        int auto_increment
+        primary key,
+    missionId int  not null,
+    category  text null,
+    type      text null,
+    duration  text null,
+    teamSize  int  null,
+    location  text null,
+    createdAt date not null,
+    updatedAt date not null,
+    constraint detailMission_missions_id_fk
+        foreign key (missionId) references missions (id)
+            on delete cascade
+);
+
+create table if not exists mission_environments
+(
+    id            int auto_increment
+        primary key,
+    missionId     int not null,
+    environmentId int not null,
+    position      int null,
+    constraint mission_environments_environment_id_fk
+        foreign key (environmentId) references environment (id),
+    constraint mission_environments_missions_id_fk
+        foreign key (missionId) references missions (id)
+            on delete cascade
+);
+
+create trigger missionEnvironmentPositionDefaultValue
+    before INSERT
+    on mission_environments
+    for each row
+BEGIN
+
+    IF NEW.position IS NULL THEN
+        SET NEW.position := (select position + 1 as position
+                             from mission_environments
+                             where missionId = NEW.missionId
+                             order by position DESC
+                             limit 1);
+    END IF;
+    IF NEW.position IS NULL THEN
+        SET NEW.position := 1;
+    END IF;
+
+END;
+
+create procedure addManyEnvironment(IN name text, IN logos text)
+BEGIN
+
+    DECLARE firstId INT DEFAULT -1;
+    DECLARE count INT DEFAULT 0;
+
+    do_this:
+        LOOP
+
+            INSERT INTO environment (name, logo) VALUES (SUBSTRING_INDEX(name, ',', 1), SUBSTRING_INDEX(logos, ',', 1));
+
+            SET name = SUBSTRING(name, LENGTH(SUBSTRING_INDEX(name, ',', 1)) + 2, LENGTH(name));
+
+            SET logos = SUBSTRING(logos, LENGTH(SUBSTRING_INDEX(logos, ',', 1)) + 2, LENGTH(logos));
+
+            IF count = 0 then
+                set firstId = last_insert_id();
+            end if;
+
+            set count = count + 1;
+
+            IF LENGTH(SUBSTRING_INDEX(name, ',', 1)) = 0 then
+                leave do_this;
+            END IF;
+
+            IF name = '' THEN
+                LEAVE do_this;
+            END IF;
+        END LOOP do_this;
+
+    SELECT id from environment where id in (firstId, (select id from environment ORDER BY id DESC limit 1));
+
+
+END;
+
+create procedure addManyMissionEnvironments(IN missionId int, IN environmentsId text)
+BEGIN
+
+    DECLARE firstId INT DEFAULT -1;
+    DECLARE count INT DEFAULT 0;
+
+    do_this:
+        LOOP
+
+            INSERT INTO mission_environments (missionId, environmentId)
+            VALUES (missionId, SUBSTRING_INDEX(environmentsId, ',', 1));
+
+
+            SET environmentsId = SUBSTRING(environmentsId, LENGTH(SUBSTRING_INDEX(environmentsId, ',', 1)) + 2,
+                                           LENGTH(environmentsId));
+
+            IF count = 0 then
+                set firstId = last_insert_id();
+            end if;
+
+            set count = count + 1;
+
+            IF LENGTH(SUBSTRING_INDEX(environmentsId, ',', 1)) = 0 then
+                leave do_this;
+            END IF;
+
+            IF environmentsId = '' THEN
+                LEAVE do_this;
+            END IF;
+        END LOOP do_this;
+
+    SELECT id
+    from mission_environments
+    where id in (firstId, (select id from mission_environments ORDER BY id DESC limit 1));
+
+
+END;
+
+create procedure getGallery(IN nameGroup text, IN nameClient text, IN userId int, IN validated int, IN role text,
+                            IN name text, IN nbPerPage int, IN lastId int)
+BEGIN
+
+    #REGION_ROLE
+
+    IF name IS null AND nameGroup IS null AND nameClient IS null AND validated = -1 AND role = 'USR' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.userId = userId
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS null AND nameClient IS null AND validated = -1 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient,
+               CONCAT(u.firstName, ' ', u.lastName) as userName,
+               u.id                                 as userId
+        FROM missions m
+                 LEFT JOIN users u on m.userId = u.id
+        WHERE m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    #REGION_ROLE
+
+    #REGION_VALIDATED
+
+    IF name IS null AND nameGroup IS null AND nameClient IS null AND validated = 0 AND role = 'USR' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.userId = userId
+          AND m.validated = false
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS null AND nameClient IS null AND validated = 0 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient,
+               CONCAT(u.firstName, ' ', u.lastName) as userName,
+               u.id                                 as userId
+        FROM missions m
+                 LEFT JOIN users u on m.userId = u.id
+        WHERE m.validated = false
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS null AND nameClient IS null AND validated = 1 AND role = 'USR' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.userId = userId
+          AND m.validated = true
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS null AND nameClient IS null AND validated = 1 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient,
+               CONCAT(u.firstName, ' ', u.lastName) as userName,
+               u.id                                 as userId
+        FROM missions m
+                 LEFT JOIN users u on m.userId = u.id
+        WHERE m.validated = true
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    #END_REGION_VALIDATED
+
+    #REGION_NAMECLIENT
+
+    IF name IS null AND nameGroup IS null AND nameClient IS NOT null AND validated = -1 AND role = 'USR' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.userId = userId
+          AND m.nameClient = nameClient
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS null AND nameClient IS NOT null AND validated = -1 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.nameClient = nameClient
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS null AND nameClient IS NOT null AND validated = 0 AND role = 'USR' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.userId = userId
+          AND m.nameClient = nameClient
+          AND m.validated = false
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS null AND nameClient IS NOT null AND validated = 0 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.nameClient = nameClient
+          AND m.validated = false
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS null AND nameClient IS NOT null AND validated = 1 AND role = 'USR' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.userId = userId
+          AND m.nameClient = nameClient
+          AND m.validated = true
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS null AND nameClient IS NOT null AND validated = 1 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.nameClient = nameClient
+          AND m.validated = true
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    #END_REGION_NAMECLIENT
+
+    #REGION_NAMEGROUP
+
+    IF name IS null AND nameGroup IS NOT null AND nameClient IS null AND validated = -1 AND role = 'USR' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.userId = userId
+          AND m.nameGroup = nameGroup
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS NOT null AND nameClient IS null AND validated = -1 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.nameGroup = nameGroup
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS NOT null AND nameClient IS null AND validated = 0 AND role = 'USR' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.userId = userId
+          AND m.nameGroup = nameGroup
+          AND m.validated = false
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS NOT null AND nameClient IS null AND validated = 0 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.nameGroup = nameGroup
+          AND m.validated = false
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS NOT null AND nameClient IS null AND validated = 1 AND role = 'USR' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.userId = userId
+          AND m.nameGroup = nameGroup
+          AND m.validated = true
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS NOT null AND nameClient IS null AND validated = 1 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.nameGroup = nameGroup
+          AND m.validated = true
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS NOT null AND nameClient IS NOT null AND validated = -1 AND role = 'USR' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.userId = userId
+          AND m.nameGroup = nameGroup
+          AND m.nameClient = nameClient
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS NOT null AND nameClient IS NOT null AND validated = -1 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.nameGroup = nameGroup
+          AND m.nameClient = nameClient
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS NOT null AND nameClient IS NOT null AND validated = 0 AND role = 'USR' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.userId = userId
+          AND m.nameGroup = nameGroup
+          AND m.nameClient = nameClient
+          AND m.validated = false
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS NOT null AND nameClient IS NOT null AND validated = 0 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.nameGroup = nameGroup
+          AND m.nameClient = nameClient
+          AND m.validated = false
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS NOT null AND nameClient IS NOT null AND validated = 1 AND role = 'USR' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.userId = userId
+          AND m.nameGroup = nameGroup
+          AND m.nameClient = nameClient
+          AND m.validated = true
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS null AND nameGroup IS NOT null AND nameClient IS NOT null AND validated = 1 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+        WHERE m.nameGroup = nameGroup
+          AND m.nameClient = nameClient
+          AND m.validated = true
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    #END_REGION_NAMEGROUP
+
+    #REGION_NAME
+
+    IF name IS NOT null AND nameGroup IS null AND nameClient IS null AND validated = -1 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+                 left join users u2 on m.userId = u2.id
+        WHERE CONCAT(u2.firstName, ' ', u2.lastName) = name
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS NOT null AND nameGroup IS null AND nameClient IS null AND validated = 0 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+                 left join users u2 on m.userId = u2.id
+        WHERE CONCAT(u2.firstName, ' ', u2.lastName) = name
+          AND m.validated = false
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS NOT null AND nameGroup IS null AND nameClient IS null AND validated = 1 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+                 left join users u2 on m.userId = u2.id
+        WHERE CONCAT(u2.firstName, ' ', u2.lastName) = name
+          AND m.validated = true
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS NOT null AND nameGroup IS null AND nameClient IS NOT null AND validated = -1 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+                 left join users u2 on m.userId = u2.id
+        WHERE CONCAT(u2.firstName, ' ', u2.lastName) = name
+          AND m.nameClient = nameClient
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS NOT null AND nameGroup IS null AND nameClient IS NOT null AND validated = 0 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+                 left join users u2 on m.userId = u2.id
+        WHERE CONCAT(u2.firstName, ' ', u2.lastName) = name
+          AND m.nameClient = nameClient
+          AND m.validated = false
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS NOT null AND nameGroup IS null AND nameClient IS NOT null AND validated = 1 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+                 left join users u2 on m.userId = u2.id
+        WHERE CONCAT(u2.firstName, ' ', u2.lastName) = name
+          AND m.nameClient = nameClient
+          AND m.validated = true
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS NOT null AND nameGroup IS NOT null AND nameClient IS null AND validated = -1 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+                 left join users u2 on m.userId = u2.id
+        WHERE CONCAT(u2.firstName, ' ', u2.lastName) = name
+          AND m.nameGroup = nameGroup
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS NOT null AND nameGroup IS NOT null AND nameClient IS null AND validated = 0 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+                 left join users u2 on m.userId = u2.id
+        WHERE CONCAT(u2.firstName, ' ', u2.lastName) = name
+          AND m.nameGroup = nameGroup
+          AND m.validated = false
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS NOT null AND nameGroup IS NOT null AND nameClient IS null AND validated = 1 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+                 left join users u2 on m.userId = u2.id
+        WHERE CONCAT(u2.firstName, ' ', u2.lastName) = name
+          AND m.nameGroup = nameGroup
+          AND m.validated = true
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS NOT null AND nameGroup IS NOT null AND nameClient IS NOT null AND validated = -1 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+                 left join users u2 on m.userId = u2.id
+        WHERE CONCAT(u2.firstName, ' ', u2.lastName) = name
+          AND m.nameGroup = nameGroup
+          AND m.nameClient = nameClient
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS NOT null AND nameGroup IS NOT null AND nameClient IS NOT null AND validated = 0 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+                 left join users u2 on m.userId = u2.id
+        WHERE CONCAT(u2.firstName, ' ', u2.lastName) = name
+          AND m.nameGroup = nameGroup
+          AND m.nameClient = nameClient
+          AND m.validated = false
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    IF name IS NOT null AND nameGroup IS NOT null AND nameClient IS NOT null AND validated = 1 AND role = 'ADM' THEN
+        SELECT m.id,
+               m.image,
+               m.nameGroup,
+               m.nameClient
+        FROM missions m
+                 left join users u2 on m.userId = u2.id
+        WHERE CONCAT(u2.firstName, ' ', u2.lastName) = name
+          AND m.nameGroup = nameGroup
+          AND m.nameClient = nameClient
+          AND m.validated = true
+          AND m.id < lastId
+        ORDER BY m.id DESC
+        LIMIT nbPerPage;
+    END IF;
+
+    #END_REGION_NAME
+
+
+END;
+
+create procedure getMission(IN extMissionId int)
+BEGIN
+
+    select s1.id                               as missionId,
+           s1.userId                           as userId,
+           s1.name                             as name,
+           s1.image                            as image,
+           s1.logoGroup                        as logoGroup,
+           s1.logoClient                       as logoClient,
+           s1.nameGroup                        as nameGroup,
+           s1.nameClient                       as nameClient,
+           s1.webSite                          as webSite,
+           s1.context                          as context,
+           s1.livrable                         as livrable,
+           s1.atecnaPlus                       as atecnaPlus,
+           s1.createdAt                        as createdAt,
+           s1.updatedAt                        as updatedAt,
+           s2.category                         as category,
+           s2.type                             as type,
+           s2.duration                         as duration,
+           s2.teamSize                         as teamSize,
+           s2.location                         as location,
+           GROUP_CONCAT(s4.id separator ',')   AS environmentsId,
+           GROUP_CONCAT(s4.name separator ',') AS environmentsName,
+           GROUP_CONCAT(s4.logo separator ',') AS environmentsLogo
+    from missions as s1
+             left join detailMission as s2
+                       ON s2.missionId = s1.id
+             left join mission_environments as s3
+                       on s1.id = s3.missionId
+             left join environment as s4
+                       on s3.environmentId = s4.id
+    where s1.id = extMissionId
+    GROUP BY s1.id;
+
+END;
+
+
