@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const _ = require('lodash');
-import { tokenKey } from '../utils/config';
+const { tokenKey } = require('../utils/config');
 
 function verifyJWTToken(token)
 {

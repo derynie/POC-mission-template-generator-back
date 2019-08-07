@@ -1,5 +1,5 @@
 const dbConnection = require('../service/dbConnection.service');
-import { noImage } from '../utils/config';
+const { noImage } = require('../utils/config');
 
 function insertMany(req, res, callback) {
     dbConnection(function (err, connection) {

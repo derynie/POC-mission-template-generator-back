@@ -2,9 +2,9 @@ const dbConnection = require('../service/dbConnection.service');
 const detailMissionController = require('./detailMission.controller');
 const environmentController = require('./environment.controller');
 const nodemailer = require('nodemailer');
-import { mailAuthentificationEmail } from '../utils/config';
-import { mailAuthentificationPassword } from '../utils/config';
-import { mailsTo } from '../utils/config';
+const { mailAuthentificationEmail } = require('../utils/config');
+const { mailAuthentificationPassword } = require('../utils/config');
+const { mailsTo } = require('../utils/config');
 
 function continueCreateOne(req, res, callback) {
     const mission = {
