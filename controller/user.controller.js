@@ -1,6 +1,6 @@
 const dbConnection = require('../service/dbConnection.service');
 const bcrypt = require('bcrypt');
-import { tempPassword } from '../utils/config';
+const { tempPassword } = require('../utils/config');
 
 let userController = {
     createOne: function (req, res) {
