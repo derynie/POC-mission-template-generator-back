@@ -1,6 +1,6 @@
 const dbConnection = require('../service/dbConnection.service');
 const bcrypt = require('bcrypt');
-const config = require('../utils/config');
+const { tempPassword } = require('../utils/config');
 
 let userController = {
     createOne: function (req, res) {
@@ -10,7 +10,7 @@ let userController = {
                 firstName: req.body.firstName,
                 lastName: req.body.lastName,
                 email: req.body.email,
-                password: config.tempPassword,
+                password: tempPassword,
                 createdAt: today,
                 updatedAt: today
             };
