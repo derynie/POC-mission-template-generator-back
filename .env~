@@ -1,8 +1,0 @@
-NODE_ENV=development
-TOKEN_KEY=vfvnfovndflvndflvknfdlvkfdnvd
-TEMP_PASSWORD='atecna59
-NO_IMAGE=https://upload.wikimedia.org/wikipedia/commons/2/20/Point_d_interrogation.jpg
-
-MAIL_AUTHENTIFICATION_EMAIL=qjournet@atecna.fr
-MAIL_AUTHENTIFICATION_PASSWORD=Toto1705//
-MAILS_TO=['qjournet@atecna.fr']
