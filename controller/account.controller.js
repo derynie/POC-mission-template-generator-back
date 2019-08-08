@@ -69,8 +69,9 @@ let accountController = {
             connection.query(query, email, function (error, results, fields) {
                 if (error) {
                     console.log("error occurred",error);
+                    res.status(401);
                     res.send({
-                        "code":400,
+                        "code":401,
                         "message":"error occurred"
                     })
                 } else {
@@ -102,15 +103,17 @@ let accountController = {
                                     })
                                 });
                             } else {
+                                res.status(401);
                                 res.send({
-                                    "code":204,
+                                    "code":401,
                                     "message":"Email and password does not match"
                                 });
                             }
                         });
                     } else {
+                        res.status(401);
                         res.send({
-                            "code":204,
+                            "code":401,
                             "message":"Email does not exits"
                         });
                     }
